@@ -3,16 +3,11 @@ import express from "express";
 const app = express();
 const port = 8000;
 
+const users = {}
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-const conversationHistory = [
-    {
-        role: "system",
-        content:
-            "Je bent een behulpzame Digital Human. Antwoord duidelijk en in het Nederlands."
-    }
-];
 
 app.get("/", (req, res) => {
     res.status(200).json({
@@ -23,7 +18,21 @@ app.get("/", (req, res) => {
 
 app.post("/chat", async (req, res) => {
     try {
-        const { message } = req.body;
+        const { userId,conversationId, message } = req.body;
+
+        if (!userId || typeof userId !== "string") {
+            return res.status(400).json({
+                status: 400,
+                message: "A valid user id is required"
+            });
+        }
+
+        if (!conversationId || typeof conversationId !== "string") {
+            return res.status(400).json({
+                status: 400,
+                message: "A valid conversation id is required"
+            })
+        }
 
         if (!message || typeof message !== "string") {
             return res.status(400).json({
@@ -31,6 +40,25 @@ app.post("/chat", async (req, res) => {
                 message: "A valid message is required"
             });
         }
+
+        if (!users[userId]) {
+            users[userId] = {
+                conversations: {}
+            };
+        }
+
+        if (!users[userId].conversations[conversationId]) {
+            users[userId].conversations[conversationId] = [
+                {
+                    role: "system",
+                    content:
+                        "Je bent een behulpzame Digital Human. Antwoord duidelijk en in het Nederlands."
+                }
+            ];
+        }
+
+        const conversationHistory =
+            users[userId].conversations[conversationId];
 
         conversationHistory.push({
             role: "user",
@@ -78,6 +106,8 @@ app.post("/chat", async (req, res) => {
 
         return res.status(200).json({
             status: 200,
+            userId: userId,
+            conversationId: conversationId,
             response: assistantMessage
         });
 
@@ -91,18 +121,53 @@ app.post("/chat", async (req, res) => {
     }
 });
 
-app.get("/history", (req, res) => {
-    res.json({
-        history: conversationHistory
+app.get("/history/:userId/:conversationId", (req, res) => {
+    const { userId, conversationId } = req.params;
+
+    if (!users[userId]) {
+        return res.status(404).json({
+            status: 404,
+            message: "User not found"
+        });
+    }
+
+    if (!users[userId].conversations[conversationId]) {
+        return res.status(404).json({
+            status: 404,
+            message: "Conversation not found"
+        });
+    }
+
+    return res.status(200).json({
+        status: 200,
+        userId: userId,
+        conversationId: conversationId,
+        history: users[userId].conversations[conversationId]
     });
 });
 
-app.delete("/history", (req, res) => {
-    conversationHistory.splice(1);
+app.delete("/history/:userId/:conversationId", (req, res) => {
+    const { userId, conversationId } = req.params;
 
-    res.json({
+    if (!users[userId]) {
+        return res.status(404).json({
+            status: 404,
+            message: "User not found"
+        });
+    }
+
+    if (!users[userId].conversations[conversationId]) {
+        return res.status(404).json({
+            status: 404,
+            message: "Conversation not found"
+        });
+    }
+
+    delete users[userId].conversations[conversationId];
+
+    return res.status(200).json({
         status: 200,
-        message: "Conversation history cleared"
+        message: "Conversation deleted"
     });
 });
 
